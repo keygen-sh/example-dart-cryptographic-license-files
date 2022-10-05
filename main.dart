@@ -35,8 +35,14 @@ void main(List<String> argv) async {
   var pubkey = SimplePublicKey(hex.decode(args['public-key']), type: KeyPairType.ed25519);
   var msg = Uint8List.fromList(utf8.encode("license/" + lic['enc']));
   var sig = base64.decode(lic['sig']);
+  bool ok;
 
-  var ok = await ed.verify(msg, signature: Signature(sig, publicKey: pubkey));
+  try {
+    ok = await ed.verify(msg, signature: Signature(sig, publicKey: pubkey));
+  } catch (e) {
+    throw new Exception('failed to verify license file: $e');
+  }
+
   if (!ok) {
     throw new Exception('invalid license file signature');
   }
@@ -52,18 +58,23 @@ void main(List<String> argv) async {
   // Parse the encrypted dataset
   var parts = (lic['enc'] as String).split('.').map((s) => base64.decode(s)).toList();
   var ciphertext = parts[0];
-  var iv = parts[1];
-  var tag = parts[2];
+  var nonce = parts[1];
+  var mac = parts[2];
 
   // Decrypt the license file's dataset
   final aes = AesGcm.with256bits(nonceLength: 16);
+  String plaintext;
 
-  var plaintext = await aes.decrypt(
-    SecretBox(ciphertext, mac: Mac(tag), nonce: iv),
-    secretKey: key,
-  ).then((v) =>
-    utf8.decode(v)
-  );
+  try {
+    var bytes = await aes.decrypt(
+      SecretBox(ciphertext, mac: Mac(mac), nonce: nonce),
+      secretKey: key,
+    );
+
+    plaintext = utf8.decode(bytes);
+  } catch (e) {
+    throw new Exception('failed to decrypt license file: $e');
+  }
 
   // Print decrypted dataset
   var data = json.decode(plaintext);
