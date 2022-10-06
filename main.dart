@@ -7,15 +7,14 @@ import 'dart:convert';
 import 'dart:io';
 
 void main(List<String> argv) async {
-  final decoder = utf8.fuse(base64);
-  final parser = ArgParser();
-  final ed = Ed25519();
+  var decoder = utf8.fuse(base64);
+  var parser = ArgParser();
 
   parser.addOption('license-file', abbr: 'f', mandatory: true);
   parser.addOption('license-key', abbr: 'k', mandatory: true);
   parser.addOption('public-key', abbr: 'p', mandatory: true);
 
-  final args = parser.parse(argv);
+  var args = parser.parse(argv);
 
   // Read and parse license file
   var cert = await File(args['license-file']).readAsString();
@@ -32,12 +31,14 @@ void main(List<String> argv) async {
   }
 
   // Verify the license file's signature
-  var pubkey = SimplePublicKey(hex.decode(args['public-key']), type: KeyPairType.ed25519);
-  var msg = Uint8List.fromList(utf8.encode("license/" + lic['enc']));
-  var sig = base64.decode(lic['sig']);
   bool ok;
 
   try {
+    var pubkey = SimplePublicKey(hex.decode(args['public-key']), type: KeyPairType.ed25519);
+    var msg = Uint8List.fromList(utf8.encode("license/" + lic['enc']));
+    var sig = base64.decode(lic['sig']);
+    var ed = Ed25519();
+
     ok = await ed.verify(msg, signature: Signature(sig, publicKey: pubkey));
   } catch (e) {
     throw new Exception('failed to verify license file: $e');
@@ -52,23 +53,22 @@ void main(List<String> argv) async {
   print("  > $lic");
 
   // Hash the license key to obtain decryption secret
-  final digest = sha256.convert(utf8.encode(args['license-key']));
-  final key = SecretKey(digest.bytes);
-
-  // Parse the encrypted dataset
-  var parts = (lic['enc'] as String).split('.').map((s) => base64.decode(s)).toList();
-  var ciphertext = parts[0];
-  var nonce = parts[1];
-  var mac = parts[2];
+  var digest = sha256.convert(utf8.encode(args['license-key']));
+  var secret = SecretKey(digest.bytes);
 
   // Decrypt the license file's dataset
-  final aes = AesGcm.with256bits(nonceLength: 16);
   String plaintext;
 
   try {
+    var parts = (lic['enc'] as String).split('.').map((s) => base64.decode(s)).toList();
+    var ciphertext = parts[0];
+    var nonce = parts[1];
+    var mac = parts[2];
+
+    var aes = AesGcm.with256bits(nonceLength: 16);
     var bytes = await aes.decrypt(
       SecretBox(ciphertext, mac: Mac(mac), nonce: nonce),
-      secretKey: key,
+      secretKey: secret,
     );
 
     plaintext = utf8.decode(bytes);
