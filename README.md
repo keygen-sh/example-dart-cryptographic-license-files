@@ -14,7 +14,7 @@ dart pub get
 ```
 
 Then run the example program, where `-f` is the path to a license file,
-`-k` is your Ed25519 public key, and `-l` is a license key. Feel free
+`-p` is your Ed25519 public key, and `-k` is a license key. Feel free
 to use these example values:
 
 ```bash
